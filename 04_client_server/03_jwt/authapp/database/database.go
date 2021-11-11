@@ -7,7 +7,7 @@ import (
 
 var GlobalDB *gorm.DB
 
-func initDB() (err error) {
+func InitDB() (err error) {
 	GlobalDB, err = gorm.Open(sqlite.Open("auth.db"), &gorm.Config{})
 	if err != nil {
 		return
