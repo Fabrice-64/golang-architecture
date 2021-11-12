@@ -1,41 +1,43 @@
 package main
 
 import (
-	"github.com/gorilla/mux"
+	"fmt"
+	"log"
+	"os"
+	"strconv"
+
+	godotenv "github.com/joho/godotenv"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
-var router *mux.Router
-
-func CreateRouter() {
-	router = mux.NewRouter()
-}
-
-func InitializeRoutes() {
-	router.HandleFunc("/signup", SignUp).Methods("POST")
-	router.HandleFunc("/signin", Signin).Methods("POST")
-
+func goDotEnv(key string) string {
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Fatalf("Error loading .env file")
+	}
+	return os.Getenv(key)
 }
 
 func main() {
-	CreateRouter()
-	InitializeRoutes()
-}
-
-type User struct {
-	gorm.Model
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type Authentication struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type Token struct {
-	Role        string `json:"role"`
-	Email       string `json:"email"`
-	TokenString string `json:"token"`
+	godotenv.Load(".env")
+	localhost := goDotEnv("host")
+	user := goDotEnv("user")
+	pwd := goDotEnv("password")
+	dbname := goDotEnv("dbname")
+	dsn := "host=" + localhost + " user=" + user + " password=" + pwd + " dbname=" + dbname + " port=5432 sslmode=disable"
+	fmt.Println(strconv.Quote(dsn))
+	conn, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		panic(err)
+	}
+	sqldb, err := conn.DB()
+	if err != nil {
+		panic(err)
+	}
+	err = sqldb.Ping()
+	if err != nil {
+		log.Fatal("database connected")
+	}
+	fmt.Println("CONNEXION - ENFIN")
 }
