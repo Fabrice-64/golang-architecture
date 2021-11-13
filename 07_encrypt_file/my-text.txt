@@ -1,0 +1,4 @@
+Ceci est mon fichier personnel.
+Je n'ai pas mis d'accents, et c'est une erreur.
+"Il est beau le Château".
+Voilà, c'est corrigé.
