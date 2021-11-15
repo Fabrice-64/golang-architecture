@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 
@@ -58,6 +59,24 @@ func register(w http.ResponseWriter, req *http.Request) {
 }
 
 func login(w http.ResponseWriter, req *http.Request) {
+	if req.Method == http.MethodPost {
+		http.Redirect(w, req, "/login", http.StatusMethodNotAllowed)
+	}
+	email := req.FormValue("email")
+	password := req.FormValue("password")
+	log.Printf("From func login: Email: %s, Password: %s", email, password)
+	if _, ok := dbUser[email]; ok {
+		log.Printf("User %s already exists", email)
+		u := dbUser[email]
+		err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password))
+		if err != nil {
+			io.WriteString(w, "Hash and Password Different")
+			return
+		} else {
+			io.WriteString(w, "Hash and Password identical")
+			return
+		}
+	}
 	tpl.ExecuteTemplate(w, "login.gohtml", nil)
 }
 
