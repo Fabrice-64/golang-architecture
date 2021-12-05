@@ -2,16 +2,20 @@ package main
 
 import (
 	"html/template"
+	"io"
 	"log"
 	"net/http"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type User struct {
 	First    string
 	Email    string
-	Password string
+	Password []byte
 }
 
+var dbUser = map[string]User{} // email and User details
 var tpl *template.Template
 
 func init() {
@@ -32,15 +36,55 @@ func index(w http.ResponseWriter, req *http.Request) {
 func register(w http.ResponseWriter, req *http.Request) {
 	u := User{}
 	if req.Method == http.MethodPost {
-		u.First = req.FormValue("first")
-		u.Email = req.FormValue("email")
-		u.Password = req.FormValue("password")
-	}
-	log.Println("User Values: ", u)
+		f := req.FormValue("first")
+		e := req.FormValue("email")
+		p := req.FormValue("password")
+		hp, err := hashPassword(p)
+		u = User{
+			First:    f,
+			Email:    e,
+			Password: hp,
+		}
+		if err != nil {
+			log.Println("Error while hashing the password")
+		}
 
+	}
+	dbUser[u.Email] = u
 	tpl.ExecuteTemplate(w, "register.gohtml", nil)
 }
 
 func login(w http.ResponseWriter, req *http.Request) {
+	if req.Method == http.MethodPost {
+		e := req.FormValue("email")
+		p := req.FormValue("password")
+		log.Println("Method Post is used")
+		if _, ok := dbUser[e]; ok {
+			log.Println("User exists")
+		} else {
+			tpl.ExecuteTemplate(w, "login.html", nil)
+			return
+		}
+		u := dbUser[e]
+		err := bcrypt.CompareHashAndPassword(u.Password, []byte(p))
+		if err != nil {
+			io.WriteString(w, "Hash and Password are different")
+			log.Println("Hash and Password are different")
+			return
+		} else {
+			log.Println("Hash and Password are identical")
+			io.WriteString(w, "Hash and Password are identical")
+			return
+		}
+	}
+
 	tpl.ExecuteTemplate(w, "login.gohtml", nil)
+}
+
+func hashPassword(p string) ([]byte, error) {
+	hp, err := bcrypt.GenerateFromPassword([]byte(p), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+	return hp, nil
 }
