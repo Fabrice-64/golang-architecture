@@ -2,6 +2,7 @@ package main
 
 import (
 	"html/template"
+	"log"
 	"net/http"
 )
 
@@ -29,6 +30,14 @@ func index(w http.ResponseWriter, req *http.Request) {
 }
 
 func register(w http.ResponseWriter, req *http.Request) {
+	u := User{}
+	if req.Method == http.MethodPost {
+		u.First = req.FormValue("first")
+		u.Email = req.FormValue("email")
+		u.Password = req.FormValue("password")
+	}
+	log.Println("User Values: ", u)
+
 	tpl.ExecuteTemplate(w, "register.gohtml", nil)
 }
 
