@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"html/template"
 	"io"
 	"log"
@@ -87,4 +90,17 @@ func hashPassword(p string) ([]byte, error) {
 		return nil, err
 	}
 	return hp, nil
+}
+
+func createToken(sid string) string {
+	key := []byte("My Secret Key")
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(sid))
+	signedMac := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	return signedMac + "|" + sid
+
+}
+
+func parseToken() {
+
 }
