@@ -4,10 +4,12 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"html/template"
 	"io"
 	"log"
 	"net/http"
+	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -20,7 +22,7 @@ type User struct {
 
 var dbUser = map[string]User{} // email and User details
 var tpl *template.Template
-
+var key := []byte("My Secret Key")
 func init() {
 	tpl = template.Must(template.ParseGlob("templates/*"))
 }
@@ -54,6 +56,13 @@ func register(w http.ResponseWriter, req *http.Request) {
 
 	}
 	dbUser[u.Email] = u
+	token := createToken(u.Email)
+
+	log.Println("Token: ", token)
+	_, err := parseToken(token)
+	if err != nil {
+		log.Println("Error while parsing the token")
+	}
 	tpl.ExecuteTemplate(w, "register.gohtml", nil)
 }
 
@@ -93,14 +102,30 @@ func hashPassword(p string) ([]byte, error) {
 }
 
 func createToken(sid string) string {
-	key := []byte("My Secret Key")
 	mac := hmac.New(sha256.New, key)
 	mac.Write([]byte(sid))
+	// HMAC needs to be converted into a printable form
 	signedMac := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 	return signedMac + "|" + sid
 
 }
 
-func parseToken() {
-
+func parseToken(signedString string) (string, error) {
+	xs := strings.SplitN(signedString, "|", 2)
+	if len(xs) != 2{
+		return "", "Stop hacking: wrong number of items!"
+	}
+	b64 := xs[0]
+	// Has been encoded in base64 in createToken
+	xb, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return "", fmt.Errorf("Could not parse the token : ", err)
+	}
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(xs[1]))
+	ok :=hmac.Equal(xb, mac.Sum(nil))
+	if !ok{
+		return "", fmt.Error("Could not parse: different signed sid and sid")
+	}
+	return xs[1], nil
 }
