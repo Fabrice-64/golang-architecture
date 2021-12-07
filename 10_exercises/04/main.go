@@ -4,8 +4,11 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"strings"
 	"text/template"
 
 	"golang.org/x/crypto/bcrypt"
@@ -60,6 +63,28 @@ func register(w http.ResponseWriter, req *http.Request) {
 }
 
 func login(w http.ResponseWriter, req *http.Request) {
+	if req.Method == http.MethodPost {
+		e := req.FormValue("email")
+		p := req.FormValue("password")
+		if e == "" || p == "" {
+			io.WriteString(w, "please type a username/password")
+		}
+		if _, ok := dbUser[e]; ok {
+			log.Println("User exists: ", e)
+		} else {
+			io.WriteString(w, "Error in username")
+			return
+		}
+		u := dbUser[e]
+		err := bcrypt.CompareHashAndPassword(u.Password, []byte(p))
+		if err != nil {
+			io.WriteString(w, "Password and Hash do not match")
+			return
+		} else {
+			tpl.ExecuteTemplate(w, "index.gohtml", nil)
+			return
+		}
+	}
 	tpl.ExecuteTemplate(w, "login.gohtml", nil)
 }
 
@@ -76,4 +101,22 @@ func createToken(sid string) string {
 	mac.Write([]byte(sid))
 	signedMac := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 	return signedMac + "|" + sid
+}
+
+func parseToken(signedString string) (string, error) {
+	xs := strings.SplitN(signedString, "|", 2)
+	if len(xs) < 2 {
+		return "", fmt.Errorf("Stop hacking my script")
+	}
+	b64 := xs[0]
+	xb, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return "", fmt.Errorf("Unable to parse the token: %s", err)
+	}
+	mac := hmac.New(sha256.New, []byte(secretKey))
+	mac.Write([]byte(xs[2]))
+	ok := hmac.Equal(xb, mac.Sum(nil))
+	if !ok {
+		return "", fmt.Errorf("Could not parse different signed string and sid")
+	}
 }
