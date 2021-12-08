@@ -11,6 +11,7 @@ import (
 	"strings"
 	"text/template"
 
+	uuid "github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -21,6 +22,7 @@ type User struct {
 }
 
 var dbUser = map[string]User{} //user email and User details
+//var sessionID = map[string]string //session ID (UUID) and user ID (email)
 var secretKey = "This is a secret key"
 var tpl *template.Template
 
@@ -106,17 +108,24 @@ func createToken(sid string) string {
 func parseToken(signedString string) (string, error) {
 	xs := strings.SplitN(signedString, "|", 2)
 	if len(xs) < 2 {
-		return "", fmt.Errorf("Stop hacking my script")
+		return "", fmt.Errorf("stop hacking my script")
 	}
 	b64 := xs[0]
 	xb, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
-		return "", fmt.Errorf("Unable to parse the token: %s", err)
+		return "", fmt.Errorf("unable to parse the token: %s", err)
 	}
 	mac := hmac.New(sha256.New, []byte(secretKey))
 	mac.Write([]byte(xs[2]))
 	ok := hmac.Equal(xb, mac.Sum(nil))
 	if !ok {
-		return "", fmt.Errorf("Could not parse different signed string and sid")
+		return "", fmt.Errorf("could not parse different signed string and sid")
 	}
+	return xs[1], nil
+}
+
+func createUUid() string {
+	// by default it's a V4 uuid in the google package
+	uuid := uuid.NewString()
+	return uuid
 }
