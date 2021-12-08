@@ -11,7 +11,7 @@ import (
 	"strings"
 	"text/template"
 
-	uuid "github.com/google/uuid"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -22,7 +22,7 @@ type User struct {
 }
 
 var dbUser = map[string]User{} //user email and User details
-//var sessionID = map[string]string //session ID (UUID) and user ID (email)
+var sessions map[string]string //session ID (UUID) and user ID (email)
 var secretKey = "This is a secret key"
 var tpl *template.Template
 
