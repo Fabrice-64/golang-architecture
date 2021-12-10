@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -21,8 +22,8 @@ type User struct {
 	Password []byte
 }
 
-var dbUser = map[string]User{} //user email and User details
-var sessions map[string]string //session ID (UUID) and user ID (email)
+var dbUser = map[string]User{}     //user email and User details
+var sessions = map[string]string{} //session ID (UUID) and user ID (email)
 var secretKey = "This is a secret key"
 var tpl *template.Template
 
@@ -38,29 +39,56 @@ func main() {
 }
 
 func index(w http.ResponseWriter, req *http.Request) {
+	c, err := req.Cookie("sessionID")
+	if err != nil {
+		c = &http.Cookie{
+			Name:  "sessionID",
+			Value: "",
+		}
+	}
+	s, err := parseToken(c.Value)
+	if err != nil {
+		log.Println(err)
+	}
+	var e string
+	if s != "" {
+		e = sessions[s]
+	}
+	log.Println("Email de l'utilisateur: ", e)
 	tpl.ExecuteTemplate(w, "index.gohtml", nil)
 }
 
 func register(w http.ResponseWriter, req *http.Request) {
 	u := User{}
 	if req.Method == http.MethodPost {
-		f := req.FormValue("first")
+		log.Println("Method is POST !")
 		e := req.FormValue("email")
+		f := req.FormValue("first")
 		p := req.FormValue("password")
 		hp, err := hashPassword(p)
 		if err != nil {
-			log.Println("Error while hashing the Pwd")
+			log.Println("could hash the pwd: ", err)
+		}
+		if _, ok := dbUser[e]; ok {
+			io.WriteString(w, "User Already exists")
+			return
 		}
 		u = User{
 			First:    f,
 			Email:    e,
 			Password: hp,
 		}
+		dbUser[u.Email] = u
+		bs, _ := json.Marshal(dbUser)
+		log.Println("Registered Users: ", string(bs))
+		// create a UUID - call the function
+		sUUID := createUUid()
+		// Connect UUID and user
+		sessions[sUUID] = u.Email
+		ss, _ := json.Marshal(sessions)
+		log.Println("Sessions Users: ", string(ss))
+
 	}
-	dbUser[u.Email] = u
-	log.Println(dbUser[u.Email])
-	token := createToken(u.Email)
-	log.Println("Token: ", token)
 	tpl.ExecuteTemplate(w, "register.gohtml", nil)
 }
 
@@ -116,7 +144,7 @@ func parseToken(signedString string) (string, error) {
 		return "", fmt.Errorf("unable to parse the token: %s", err)
 	}
 	mac := hmac.New(sha256.New, []byte(secretKey))
-	mac.Write([]byte(xs[2]))
+	mac.Write([]byte(xs[1]))
 	ok := hmac.Equal(xb, mac.Sum(nil))
 	if !ok {
 		return "", fmt.Errorf("could not parse different signed string and sid")
