@@ -39,13 +39,15 @@ func main() {
 }
 
 func index(w http.ResponseWriter, req *http.Request) {
-	c, err := req.Cookie("sessionID")
+	log.Println("We are currently on Index function !")
+	c, err := req.Cookie("Cookie-04")
 	if err != nil {
 		c = &http.Cookie{
-			Name:  "sessionID",
+			Name:  "Cookie-04",
 			Value: "",
 		}
 	}
+	log.Println("Index - Cookie-04 Value: ", c)
 	s, err := parseToken(c.Value)
 	if err != nil {
 		log.Println(err)
@@ -54,11 +56,13 @@ func index(w http.ResponseWriter, req *http.Request) {
 	if s != "" {
 		e = sessions[s]
 	}
-	log.Println("Email de l'utilisateur: ", e)
-	tpl.ExecuteTemplate(w, "index.gohtml", nil)
+	u := dbUser[e]
+	log.Println("Prénom de l'utilisateur: ", u.First)
+	tpl.ExecuteTemplate(w, "index.gohtml", u.First)
 }
 
 func register(w http.ResponseWriter, req *http.Request) {
+	log.Println("We have just landed on register function !")
 	u := User{}
 	if req.Method == http.MethodPost {
 		log.Println("Method is POST !")
@@ -79,14 +83,28 @@ func register(w http.ResponseWriter, req *http.Request) {
 			Password: hp,
 		}
 		dbUser[u.Email] = u
+		// for check
 		bs, _ := json.Marshal(dbUser)
 		log.Println("Registered Users: ", string(bs))
 		// create a UUID - call the function
 		sUUID := createUUid()
 		// Connect UUID and user
 		sessions[sUUID] = u.Email
+		// for check
 		ss, _ := json.Marshal(sessions)
 		log.Println("Sessions Users: ", string(ss))
+		// Create Token for the cookie: a hash | the uuid
+		token := createToken(sUUID)
+		// Create cookie
+		c := &http.Cookie{
+			Name:  "Cookie-04",
+			Value: token,
+		}
+		// Set cookie
+		http.SetCookie(w, c)
+		// Then redirect to "/"
+		tpl.ExecuteTemplate(w, "index.gohtml", u.First)
+		return
 
 	}
 	tpl.ExecuteTemplate(w, "register.gohtml", nil)
@@ -111,7 +129,14 @@ func login(w http.ResponseWriter, req *http.Request) {
 			io.WriteString(w, "Password and Hash do not match")
 			return
 		} else {
-			tpl.ExecuteTemplate(w, "index.gohtml", nil)
+			sUUID := createUUid()
+			token := createToken(sUUID)
+			c := &http.Cookie{
+				Name:  "Cookie-04",
+				Value: token,
+			}
+			http.SetCookie(w, c)
+			tpl.ExecuteTemplate(w, "index.gohtml", u.First)
 			return
 		}
 	}
@@ -126,11 +151,11 @@ func hashPassword(p string) ([]byte, error) {
 	return hp, nil
 }
 
-func createToken(sid string) string {
+func createToken(suuid string) string {
 	mac := hmac.New(sha256.New, []byte(secretKey))
-	mac.Write([]byte(sid))
+	mac.Write([]byte(suuid))
 	signedMac := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-	return signedMac + "|" + sid
+	return signedMac + "|" + suuid
 }
 
 func parseToken(signedString string) (string, error) {
