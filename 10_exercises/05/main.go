@@ -1,15 +1,16 @@
 package main
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"time"
 
+	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -18,6 +19,11 @@ type User struct {
 	First    string
 	Email    string
 	Password []byte
+}
+
+type CustomClaims struct {
+	jwt.StandardClaims
+	sID string
 }
 
 var secretKey = "MySecretKey"
@@ -37,7 +43,24 @@ func main() {
 }
 
 func index(w http.ResponseWriter, req *http.Request) {
-
+	c, err := req.Cookie("Cookie-05")
+	if err != nil {
+		c = &http.Cookie{
+			Name:  "Cookie-05",
+			Value: "",
+		}
+		tpl.ExecuteTemplate(w, "index.gohtml", "Unknown")
+		return
+	}
+	log.Println("Value of Cookie: ", c.Value)
+	sID, err := parseToken(c.Value)
+	if err != nil {
+		io.WriteString(w, err.Error())
+		return
+	}
+	e := dbSession[sID]
+	u := dbUsers[e]
+	log.Println("User email is: ", u.Email)
 	tpl.ExecuteTemplate(w, "index.gohtml", nil)
 }
 
@@ -79,7 +102,11 @@ func register(w http.ResponseWriter, req *http.Request) {
 			Value: "",
 		}
 		// add a token to the Cookie
-		token := createToken(sUUID)
+		token, err := createToken(sUUID)
+		if err != nil {
+			msg := url.QueryEscape("Could not create a token")
+			http.Redirect(w, req, "/?msg="+msg, http.StatusInternalServerError)
+		}
 		c.Value = token
 		http.SetCookie(w, c)
 		log.Println("Register - Cookie: ", c)
@@ -113,7 +140,12 @@ func login(w http.ResponseWriter, req *http.Request) {
 		}
 		// As the User exists & pwd is ok: create session
 		sUUID := uuid.NewString()
-		token := createToken(sUUID)
+		token, err := createToken(sUUID)
+		if err != nil {
+			msg := url.QueryEscape("Could not create a token")
+			http.Redirect(w, req, "/?msg="+msg, http.StatusInternalServerError)
+			return
+		}
 		c := &http.Cookie{
 			Name:  "Cookie-05",
 			Value: token,
@@ -134,9 +166,30 @@ func hashPassword(p string) ([]byte, error) {
 	return hp, nil
 }
 
-func createToken(sUUID string) string {
-	mac := hmac.New(sha256.New, []byte(secretKey))
-	mac.Write([]byte(sUUID))
-	sessionMac := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-	return string(sessionMac) + "|" + sUUID
+func createToken(sUUID string) (string, error) {
+	cc := CustomClaims{
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(5 * time.Minute).Unix(),
+		},
+		sID: sUUID,
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, cc)
+	st, err := token.SignedString([]byte(secretKey))
+	if err != nil {
+		return "", fmt.Errorf("error while signing the jwt token: %w", err)
+	}
+	return st, nil
+}
+
+func parseToken(st string) (string, error) {
+	token, err := jwt.ParseWithClaims(st, &CustomClaims{}, func(t *jwt.Token) (interface{}, error) {
+		return []byte(secretKey), nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("could not parse the token %w", err)
+	}
+	if !token.Valid {
+		return "", fmt.Errorf("token parsing sent back wrong result")
+	}
+	return token.Claims.(*CustomClaims).sID, nil
 }
