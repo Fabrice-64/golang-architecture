@@ -1,6 +1,7 @@
 # This exercise combines client and server using OAuth2 protocol
 
 Server and Client are to be run together.
+Taken from Official User Guide of go package OAuth2
 
 # Server
 ## Configure
